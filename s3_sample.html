@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>S3 Browser</title>
+  <script src="https://sdk.amazonaws.com/js/aws-sdk-2.0.0-rc13.min.js"></script>
+  <script type="text/javascript" src="http://vuejs.org/js/vue.min.js"></script>
+</head>
+<body>
+  <div id="bucket-root">
+    <input type="file" v-on="change:file_selected" id="up-file"/>
+    <hr>
+    <div v-model="message" style="color:red"></div>
+    <button v-on="click:load">List bucket</button>
+    <div v-repeat="items">
+      <span>{{$index}} - {{name}}</span>
+    </div>
+  </div>
+  <div id="fb-root"></div>
+  <script type="text/javascript">
+    var appId = '$$$ Facebook Application Id $$$';
+    var roleArn = 'arn:aws:iam::1234567890:role/for-browser';
+    var bucketName = 'hoge-bucket';
+    var fbUserId;
+    AWS.config.region = 'ap-northeast-1';
+    var bucket = new AWS.S3({
+      params: {
+        Bucket: bucketName
+      }
+    });
+    var vm = new Vue({
+      el: '#bucket-root',
+      data: {
+       items: [],
+       message: ""
+      },
+      methods: {
+        ready: function() {
+        },
+        file_selected: function(){
+          console.log(fbUserId);
+          var file = document.getElementById('up-file').files[0];
+          if (file) {
+            if ( ! window.confirm(file.name + 'をアップロードしますか?') ) return;  
+
+            var objKey = file.name;
+            var params = {
+              Key: objKey,
+              ContentType: file.type,
+              Body: file,
+              ACL: 'public-read'
+            };
+            bucket.putObject(params, function (err, data) {
+              if (err) {
+                vm.$data.message = 'ERROR: ' + err;
+              } else {
+                vm.$data.message = "";
+                load_objects();
+              }
+            });
+          } else {
+            vm.$data.message = 'Nothing to upload.';
+          }
+        },
+        load: function(ev){
+          load_objects();
+        },
+        deleteAll: function(){
+          vm.$data.item = [];
+        }
+      }
+    });
+
+    function load_objects(){
+      bucket.listObjects({},
+        function (err, data) {
+        if (err) {
+          vm.$data.message = 'ERROR: ' + err;
+        } else {
+          data.Contents.forEach(function (obj) {
+            vm.$data.items.push({
+              "name":  obj.Key
+            });
+          });
+        }
+      });
+    }
+
+    /*!
+     * Login to your application using Facebook.
+     * Uses the Facebook SDK for JavaScript available here:
+     * https://developers.facebook.com/docs/javascript/gettingstarted/
+     */
+    window.fbAsyncInit = function () {
+      FB.init({
+          appId: appId
+      });
+      FB.login(function (response) {
+        bucket.config.credentials = new AWS.WebIdentityCredentials({
+          ProviderId: 'graph.facebook.com',
+          RoleArn: roleArn,
+          WebIdentityToken: response.authResponse.accessToken
+      });
+      fbUserId = response.authResponse.userID;
+      });
+    };
+     // Load the Facebook SDK asynchronously
+    (function (d, s, id) {
+      var js, fjs = d.getElementsByTagName(s)[0];
+      if (d.getElementById(id)) {
+        return;
+      }
+      js = d.createElement(s);
+      js.id = id;
+      js.src = "//connect.facebook.net/en_US/all.js";
+      fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+  </script>
+</body>
+</html>
